@@ -1,0 +1,26 @@
+# PartFlow inference — pure-pip dependencies.
+#
+# The compiled CUDA extensions (torch, spconv, flash-attn, kaolin,
+# diff_gaussian_rasterization, nvdiffrast, diffoctreerast) are version- and
+# CUDA-specific. Install them with the bundled `setup.sh` (adapted from
+# TRELLIS) BEFORE installing this file. See README.md.
+
+huggingface_hub
+numpy
+pillow
+imageio
+imageio-ffmpeg
+tqdm
+easydict
+opencv-python-headless
+scipy
+ninja
+rembg
+onnxruntime
+trimesh
+open3d
+xatlas
+pyvista
+pymeshfix
+igraph
+transformers
