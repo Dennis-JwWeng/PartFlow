@@ -4,14 +4,14 @@
 Pipeline (per edit case)::
 
     edit image --DINOv2--> condition tokens
-    ori SS latent  + cond --Stage1 SS ControlNet--> edited SS latent
+    source SS latent  + cond --Stage 1 (sparse-structure flow)--> edited SS latent
     edited SS latent --ss_dec--> 16^3 occupancy --> edited voxel coords
-    ori SLat (mapped to new coords) + cond --Stage2 SLat ControlNet--> edited SLat
-    edited SLat --TRELLIS decoders--> mesh + gaussians --> edit.glb
+    source SLAT (mapped to new coords) + cond --Stage 2 (structured-latent flow)--> edited SLAT
+    edited SLAT --TRELLIS decoders--> mesh + gaussians --> edit.glb
 
-Only the two ControlNet denoisers (Stage1 / Stage2) are PartFlow weights; the
-DINOv2 encoder and the TRELLIS SS/SLat decoders are frozen pretrained models
-fetched from their official Hugging Face repos.
+Only the two PartFlow stage models (Stage 1 / Stage 2) are released weights;
+the DINOv2 encoder and the TRELLIS SS/SLAT decoders are frozen pretrained
+models fetched from their official Hugging Face repos.
 
 Usage
 -----
@@ -145,9 +145,9 @@ class PartFlowPipeline:
         print("[PartFlow] loading DINOv2 image encoder ...", flush=True)
         self.dinov2 = _load_dinov2(DINOV2_NAME).eval().to(device)
 
-        print("[PartFlow] loading Stage1 SS ControlNet ...", flush=True)
+        print("[PartFlow] loading Stage 1 (sparse-structure flow) ...", flush=True)
         self.ss_model = _build_denoiser(s1_config, s1_ckpt, device)
-        print("[PartFlow] loading Stage2 SLat ControlNet ...", flush=True)
+        print("[PartFlow] loading Stage 2 (structured-latent flow) ...", flush=True)
         self.slat_model = _build_denoiser(s2_config, s2_ckpt, device)
 
         print("[PartFlow] loading frozen TRELLIS decoders ...", flush=True)
@@ -187,7 +187,7 @@ class PartFlowPipeline:
 
         cond, neg_cond = self.encode_image(case["edit_image_path"])
 
-        # ---- Stage 1: sparse-structure ControlNet ----
+        # ---- Stage 1: sparse-structure flow ----
         ori_ss = torch.tensor(case["ori_ss"]).float().unsqueeze(0).to(self.device)
         z_ss = self.sampler.sample(
             self.ss_model,
@@ -204,7 +204,7 @@ class PartFlowPipeline:
         ss_decoded = self.ss_dec(z_ss)
         edit_coords = torch.argwhere(ss_decoded > 0)[:, [0, 2, 3, 4]].int().to(self.device)
 
-        # ---- Stage 2: structured-latent ControlNet (raw SLat space) ----
+        # ---- Stage 2: structured-latent flow (raw SLAT space) ----
         mapped_ori = map_ori_to_edit_coords(
             case["ori_slat_coords"],
             case["ori_slat_feats"],

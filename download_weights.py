@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Download PartFlow ControlNet weights from Hugging Face.
+"""Download PartFlow stage-model weights from Hugging Face.
 
-Fetches the two trained denoisers from `ART-3D/PartFlow_models` into ./weights:
+Fetches the two trained stage models from `ART-3D/PartFlow_models` into ./weights:
 
     weights/
         stage1_ss/denoiser_ema0.9999_step0080000.pt
