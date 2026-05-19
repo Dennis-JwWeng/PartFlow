@@ -2,30 +2,20 @@
 
 ### Feedforward 3D Editing Learns from Semantic-Part Transformation
 
-[Project Page](#) · [Paper](#) · [arXiv](#) · [🤗 Dataset (Pxform)](#) · [🤗 Weights](https://huggingface.co/ART-3D/PartFlow_models)
+[Project Page](https://dennis-jwweng.github.io/pxform/) · [Paper (coming soon)](#) · [arXiv (coming soon)](#) · [🤗 Dataset (Pxform)](https://huggingface.co/datasets/ART-3D/Pxform_v1) · [🤗 Weights](https://huggingface.co/ART-3D/PartFlow_models)
 
 This repository contains the **inference code** for **PartFlow**, a feedforward
 3D editing network that edits an existing 3D asset to match a target edit image.
 
-## Abstract
+## Overview
 
-3D editing is a fundamental capability for scalable 3D content creation. While
-image editing has rapidly evolved toward large-scale feedforward generative
-paradigms, 3D AI generation remains dominated by training-free editing
-pipelines. A central challenge of feedforward 3D editing lies in the lack of
-high-quality paired supervision: editable 3D assets require simultaneous
-preservation of geometry, multi-view consistency, structural coherence, and
-localized edit controllability.
-
-We introduce a new perspective: scalable feedforward 3D editing should be
-learned from **semantic-part transformations**. Based on this insight, we
-propose **Pxform**, a high-quality 3D editing dataset with over 100K consistent
-before/after editing pairs across seven edit types, grounding edits directly in
-semantic 3D parts. Built upon Pxform, we propose **PartFlow**, a feedforward 3D
-editing network that injects source-aware latent control into pretrained 3D
-generative priors. PartFlow uses mask-aware velocity preservation and
-render-space consistency supervision to jointly improve edit fidelity and
-source preservation, while requiring **no 3D edit mask during inference**.
+Scalable feedforward 3D editing should be learned from **semantic-part
+transformations**. We propose **Pxform**, a high-quality 3D editing dataset with
+over 100K consistent before/after editing pairs across seven edit types,
+grounding edits directly in semantic 3D parts. Built upon Pxform, **PartFlow**
+is a feedforward 3D editing network that injects source-aware latent control
+into pretrained 3D generative priors, and requires **no 3D edit mask during
+inference**.
 
 ## How it works
 
