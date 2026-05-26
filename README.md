@@ -14,7 +14,7 @@
 </div>
 
 <div align="center">
-  <img src="assets/teaser_geometry.jpg" alt="PartFlow — geometry edits gallery" width="92%">
+  <img src="assets/gallery.png" alt="PartFlow — edited asset gallery" width="95%">
 </div>
 
 > **PartFlow** is a feedforward 3D editing network that edits an existing 3D
@@ -57,12 +57,6 @@ source structured latent (SLAT)  + condition ──Stage 2──► edited SLAT 
 The DINOv2 image encoder and the TRELLIS SS / SLAT decoders are frozen
 pretrained models, fetched automatically on first run. Only the two PartFlow
 stage models are released here.
-
-## Gallery — color & material edits
-
-<div align="center">
-  <img src="assets/teaser_colormat.jpg" alt="PartFlow — color/material edits gallery" width="92%">
-</div>
 
 ## Installation
 
@@ -148,6 +142,14 @@ PartFlow/
 └── requirements.txt    pure-pip dependencies
 ```
 
+## Results Comparison
+
+<div align="center">
+  <img src="assets/teaser_geometry.jpg" alt="PartFlow vs. baselines — geometry edits" width="95%">
+  <br/><br/>
+  <img src="assets/teaser_colormat.jpg" alt="PartFlow vs. baselines — appearance edits" width="95%">
+</div>
+
 ## Citation
 
 ```bibtex
@@ -161,5 +163,4 @@ PartFlow/
 
 ## Acknowledgements
 
-Built on [TRELLIS](https://github.com/microsoft/TRELLIS) and
-[DINOv2](https://github.com/facebookresearch/dinov2).
+Built on [TRELLIS](https://github.com/microsoft/TRELLIS).
