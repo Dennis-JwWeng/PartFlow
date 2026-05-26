@@ -1,6 +1,6 @@
 <div align="center">
 
-# PartFlow: Feedforward 3D Editing Learns from Semantic-Part Transformation
+# Feedforward 3D Editing Learns from Semantic-Part Transformation
 
 </div>
 
