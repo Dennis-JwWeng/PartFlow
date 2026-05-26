@@ -335,13 +335,15 @@ def main() -> None:
     loader = DataLoader(dataset, batch_size=1, collate_fn=collate_identity)
     print(f"[PartFlow] {len(dataset)} case(s) to process.\n")
 
-    summary = []
+    n_ok = n_total = 0
     for (case,) in loader:
+        n_total += 1
         eid = case["edit_id"]
         out_dir = os.path.join(args.output_dir, eid)
         glb_path = os.path.join(out_dir, "edit.glb")
         if args.skip_existing and os.path.isfile(glb_path):
             print(f"[skip] {eid} (edit.glb exists)")
+            n_ok += 1
             continue
         try:
             t0 = time.time()
@@ -356,16 +358,11 @@ def main() -> None:
             )
             dt = time.time() - t0
             print(f"[ok]   {eid}  ->  {glb_path}  ({dt:.1f}s)")
-            summary.append({"edit_id": eid, "glb": glb_path, "seconds": round(dt, 1)})
+            n_ok += 1
         except Exception as exc:  # noqa: BLE001
             print(f"[FAIL] {eid}: {exc!r}")
-            summary.append({"edit_id": eid, "error": repr(exc)})
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    with open(os.path.join(args.output_dir, "run_summary.json"), "w") as f:
-        json.dump(summary, f, indent=2)
-    n_ok = sum("glb" in s for s in summary)
-    print(f"\n[PartFlow] done: {n_ok}/{len(summary)} succeeded.")
+    print(f"\n[PartFlow] done: {n_ok}/{n_total} succeeded.")
 
 
 if __name__ == "__main__":

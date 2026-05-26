@@ -114,18 +114,7 @@ python inference.py --input /path/to/pxform/cases --output_dir outputs
 #   --skip_existing      resume a partial run
 ```
 
-Each case writes `outputs/<edit_id>/edit.glb` and `pred_slat.npz`; a
-`run_summary.json` is written at the end.
-
-### Notes
-
-- **Raw SLAT space** — PartFlow operates on un-normalised SLAT features; no
-  feature normalisation is applied at inference.
-- **Image preprocessing** — edit images are segmented with `rembg`(u2net) and
-  tight-cropped to match training. Set `PARTFLOW_SKIP_REMBG=1` if your inputs
-  are already clean cut-outs (e.g. pre-rendered RGBA from a 3D viewer).
-- **Offline DINOv2** — set `DINOV2_LOCAL_PATH` to a local
-  `facebookresearch/dinov2` checkout to avoid the torch.hub download.
+Each case writes `outputs/<edit_id>/edit.glb` and `pred_slat.npz`.
 
 ## Repository layout
 
