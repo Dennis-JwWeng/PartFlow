@@ -16,7 +16,7 @@ models fetched from their official Hugging Face repos.
 Usage
 -----
     # single case directory
-    python inference.py --input examples/mod_paint_bucket_hinged_cap --output_dir outputs
+    python inference.py --input examples/mod_glass_disc_table --output_dir outputs
 
     # a parent directory of many case sub-directories
     python inference.py --input /path/to/pxform/cases --output_dir outputs
