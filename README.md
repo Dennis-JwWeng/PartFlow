@@ -2,6 +2,19 @@
 
 # Feedforward 3D Editing Learns from Semantic-Part Transformation
 
+[Jiawei Weng](mailto:jweng007@e.ntu.edu.sg)<sup>1,*</sup>,
+[Saining Zhang](https://sainingzhang.github.io/)<sup>1,*,†</sup>,
+[Zhenxin Diao](mailto:diaozhenxin2005@outlook.com)<sup>2,*</sup>,
+[Peishuo Li](mailto:peishuo001@e.ntu.edu.sg)<sup>1</sup>,
+[Henghaofan Zhang](mailto:hhfzhang@outlook.com)<sup>2</sup>,
+[Junhao Chen](https://yisuanwang.github.io/)<sup>2</sup>,
+[Hao Zhao](https://sites.google.com/view/fromandto)<sup>2,†</sup>
+
+<sup>1</sup>Nanyang Technological University, Singapore &nbsp;&nbsp;
+<sup>2</sup>Tsinghua University, China
+
+<sub>*Equal contribution. †Corresponding author.</sub>
+
 </div>
 
 <div align="center">
