@@ -4,10 +4,8 @@
 Fetches the two trained stage models from `ART-3D/PartFlow_models` into ./weights:
 
     weights/
-        stage1_ss/denoiser_ema0.9999_step0080000.pt
-        stage1_ss/config.json
-        stage2_slat/denoiser_ema0.9999_step0080000.pt
-        stage2_slat/config.json
+        stage1_ss/model.pt
+        stage2_slat/model.pt
 
 The frozen DINOv2 encoder and TRELLIS SS/SLat decoders are NOT downloaded here
 — `inference.py` fetches them on first run from their official repos.

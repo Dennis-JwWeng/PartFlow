@@ -79,10 +79,10 @@ directory holding many cases, so it plugs straight into a `DataLoader`.
 
 ```bash
 # single case
-python inference.py --input examples/add_ring_band --output_dir outputs
+python inference.py --input examples/mod_paint_bucket_hinged_cap --output_dir outputs
 
 # a whole directory of cases
-python inference.py --input /path/to/pxform/h3d_edit --output_dir outputs
+python inference.py --input /path/to/pxform/cases --output_dir outputs
 
 # useful flags
 #   --steps 50           flow-sampling steps

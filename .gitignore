@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 weights/
 outputs/
+outputs_*/
 .u2net_cache/
 *.glb
 *.mp4

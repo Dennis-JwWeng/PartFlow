@@ -16,10 +16,10 @@ models fetched from their official Hugging Face repos.
 Usage
 -----
     # single case directory
-    python inference.py --input examples/add_ring_band --output_dir outputs
+    python inference.py --input examples/mod_paint_bucket_hinged_cap --output_dir outputs
 
     # a parent directory of many case sub-directories
-    python inference.py --input /path/to/pxform/h3d_edit --output_dir outputs
+    python inference.py --input /path/to/pxform/cases --output_dir outputs
 
 See README.md for the expected per-case data layout.
 """
