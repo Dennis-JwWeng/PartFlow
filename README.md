@@ -25,11 +25,11 @@
 
 ## Highlights
 
-- **Feedforward** — one forward pass per edit; ≈30 s on a single GPU
+- **Feedforward** — one forward pass per edit
 - **Semantic-part grounded** — trained on Pxform's part-level pairs
 - **Mask-free at inference** — only needs the source asset + a target image
 - **Two-stage flow** — sparse-structure edit ➜ structured-latent edit
-- **TRELLIS-compatible** — re-uses pretrained TRELLIS decoders & DINOv2 encoder
+
 
 ## Method
 
@@ -48,28 +48,26 @@ with a zero-linear gated reference branch and a mask-aware training loss:
   to the edited coords + edit condition, predicts the edited SLAT, which the
   TRELLIS decoders turn into a textured `edit.glb`.
 
-```text
-edit image ──DINOv2──► image condition
-source sparse-structure latent + condition ──Stage 1──► edited sparse structure ──► edited voxels
-source structured latent (SLAT)  + condition ──Stage 2──► edited SLAT          ──► edit.glb
-```
-
-The DINOv2 image encoder and the TRELLIS SS / SLAT decoders are frozen
-pretrained models, fetched automatically on first run. Only the two PartFlow
-stage models are released here.
-
 ## Installation
 
-PartFlow needs the same CUDA extensions as TRELLIS (`spconv`, `flash-attn`,
-`kaolin`, `diff_gaussian_rasterization`, `nvdiffrast`, `diffoctreerast`).
+PartFlow reuses the TRELLIS runtime (same CUDA extensions, same frozen
+DINOv2 / SS / SLAT decoders). Set up TRELLIS first, then add PartFlow on top.
 Tested with **Python 3.10**, **PyTorch 2.5.0**, **CUDA 12.4**.
 
+**1. Set up the TRELLIS environment.** Follow the official
+[TRELLIS installation guide](https://github.com/microsoft/TRELLIS#-installation)
+to create the conda env and build the CUDA extensions (`spconv`,
+`flash-attn`, `kaolin`, `diff_gaussian_rasterization`, `nvdiffrast`,
+`diffoctreerast`). For convenience, an equivalent one-liner is bundled here:
+
 ```bash
-# 1. compiled CUDA extensions (adapted from TRELLIS)
 . ./setup.sh --new-env --basic --flash-attn --diffoctreerast --spconv \
              --mipgaussian --kaolin --nvdiffrast
+```
 
-# 2. pure-pip dependencies
+**2. Install PartFlow's extra Python dependencies** into the same env:
+
+```bash
 pip install -r requirements.txt
 ```
 
