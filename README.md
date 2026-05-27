@@ -153,11 +153,14 @@ PartFlow/
 ## Citation
 
 ```bibtex
-@article{pxform2026,
-  title   = {Pxform: Feedforward 3D Editing Learns from Semantic-Part Transformation},
-  author  = {Pxform Team},
-  journal = {arXiv preprint arXiv:2605.27351},
-  year    = {2026}
+@article{weng2026partflow,
+  title         = {Feedforward 3D Editing Learns from Semantic-Part Transformation},
+  author        = {Weng, Jiawei and Zhang, Saining and Diao, Zhenxin and Li, Peishuo and Zhang, Henghaofan and Chen, Junhao and Zhao, Hao},
+  year          = {2026},
+  eprint        = {2605.27351},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  url           = {https://arxiv.org/abs/2605.27351}
 }
 ```
 
