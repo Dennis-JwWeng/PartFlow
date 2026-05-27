@@ -19,8 +19,8 @@
 
 <div align="center">
   <a href="https://dennis-jwweng.github.io/pxform/"><img src=https://img.shields.io/badge/Project%20Page-333399.svg?logo=googlehome height=22px></a>
-  <a href="#"><img src=https://img.shields.io/badge/Paper-coming%20soon-b5212f.svg?logo=readthedocs height=22px></a>
-  <a href="#"><img src=https://img.shields.io/badge/Arxiv-coming%20soon-b5212f.svg?logo=arxiv height=22px></a>
+  <a href="https://arxiv.org/abs/2605.27351"><img src=https://img.shields.io/badge/Paper-arxiv-b5212f.svg?logo=readthedocs height=22px></a>
+  <a href="https://arxiv.org/abs/2605.27351"><img src=https://img.shields.io/badge/Arxiv-2605.27351-b5212f.svg?logo=arxiv height=22px></a>
   <a href="https://huggingface.co/datasets/ART-3D/Pxform_v1"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Dataset-Pxform__v1-d96902.svg height=22px></a>
   <a href="https://huggingface.co/ART-3D/PartFlow_models"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Weights-PartFlow__models-276cb4.svg height=22px></a>
   <a href="LICENSE"><img src=https://img.shields.io/badge/License-MIT-yellow.svg height=22px></a>
@@ -156,7 +156,7 @@ PartFlow/
 @article{pxform2026,
   title   = {Pxform: Feedforward 3D Editing Learns from Semantic-Part Transformation},
   author  = {Pxform Team},
-  journal = {Preprint},
+  journal = {arXiv preprint arXiv:2605.27351},
   year    = {2026}
 }
 ```
