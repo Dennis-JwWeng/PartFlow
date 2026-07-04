@@ -139,8 +139,10 @@ class PartFlowPipeline:
         s1_ckpt: str,
         s2_ckpt: str,
         device: str = "cuda",
+        raw_slat: bool = False,
     ) -> None:
         self.device = device
+        self.raw_slat = raw_slat
 
         print("[PartFlow] loading DINOv2 image encoder ...", flush=True)
         self.dinov2 = _load_dinov2(DINOV2_NAME).eval().to(device)
@@ -156,6 +158,15 @@ class PartFlowPipeline:
         self.decode_pipe.cuda()
         self.decode_pipe.models["slat_decoder_mesh"].eval()
         self.decode_pipe.models["slat_decoder_gs"].eval()
+
+        # Stage 2 operates in TRELLIS-normalized SLat space: the released
+        # weights are trained on `(feats - mean) / std`, so the source SLat
+        # control input must be normalized and the sampled output
+        # denormalized before decoding. `raw_slat=True` skips both (for
+        # legacy weights trained on raw H3D latents).
+        norm = self.decode_pipe.slat_normalization
+        self.slat_mean = np.array(norm["mean"], dtype=np.float32).reshape(1, -1)
+        self.slat_std = np.array(norm["std"], dtype=np.float32).reshape(1, -1)
 
         self.sampler = FlowEulerCfgSampler(sigma_min=1e-5)
 
@@ -204,10 +215,15 @@ class PartFlowPipeline:
         ss_decoded = self.ss_dec(z_ss)
         edit_coords = torch.argwhere(ss_decoded > 0)[:, [0, 2, 3, 4]].int().to(self.device)
 
-        # ---- Stage 2: structured-latent flow (raw SLAT space) ----
+        # ---- Stage 2: structured-latent flow (normalized SLat space) ----
+        # Normalize before mapping so zero-filled new voxels stay at 0 in
+        # normalized space, matching the training-time alignment.
+        ori_slat_feats = case["ori_slat_feats"]
+        if not self.raw_slat:
+            ori_slat_feats = (ori_slat_feats - self.slat_mean) / self.slat_std
         mapped_ori = map_ori_to_edit_coords(
             case["ori_slat_coords"],
-            case["ori_slat_feats"],
+            ori_slat_feats,
             edit_coords[:, 1:].cpu().numpy(),
         )
         in_ch = self.slat_model.in_channels
@@ -229,6 +245,11 @@ class PartFlowPipeline:
             cfg_strength=cfg_strength,
             verbose=False,
         ).samples.detach()
+
+        if not self.raw_slat:
+            std = torch.tensor(self.slat_std, device=self.device)
+            mean = torch.tensor(self.slat_mean, device=self.device)
+            slat = slat * std + mean
 
         # ---- Decode SLat to mesh + gaussians ----
         decoded = self.decode_pipe.decode_slat(slat, ["mesh", "gaussian"])
@@ -297,6 +318,9 @@ def parse_args() -> argparse.Namespace:
                    help="Classifier-free guidance strength (0 = condition only).")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="cuda")
+    p.add_argument("--raw_slat", action="store_true",
+                   help="Run Stage 2 in raw SLat space (only for legacy weights "
+                        "trained without latent normalization).")
     p.add_argument("--skip_existing", action="store_true",
                    help="Skip cases whose edit.glb already exists.")
     return p.parse_args()
@@ -329,6 +353,7 @@ def main() -> None:
         s1_ckpt=s1_ckpt,
         s2_ckpt=s2_ckpt,
         device=args.device,
+        raw_slat=args.raw_slat,
     )
 
     dataset = PxformDataset(args.input, manifest=args.manifest)

@@ -107,6 +107,9 @@ Inference reads pre-encoded inputs. Each *case* is a directory:
 
 `ori_ss_latents.npz` / `ori_latents.npz` are the TRELLIS latents of the
 **source** asset; produce them with the standard TRELLIS image-to-3D encoder.
+Provide the SLAT `feats` as **raw** encoder output — inference normalizes them
+with the TRELLIS latent statistics internally (the stage models operate in
+normalized SLat space) and denormalizes the prediction before decoding.
 Ground-truth `edit_*` files, if present, are ignored by inference.
 
 ## Run inference
