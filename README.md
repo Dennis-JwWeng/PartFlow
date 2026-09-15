@@ -1,6 +1,6 @@
 <div align="center">
 
-# Feedforward 3D Editing Learns from Semantic-Part Transformation
+# [SIGGRAPH ASIA 2026] Feedforward 3D Editing Learns from Semantic-Part Transformation
 
 [Jiawei Weng](mailto:jweng007@e.ntu.edu.sg)<sup>1,&ast;</sup>,
 [Saining Zhang](https://sainingzhang.github.io/)<sup>1,&ast;,†</sup>,
