@@ -7,3 +7,12 @@ outputs_*/
 *.glb
 *.mp4
 .DS_Store
+data/Pxform_v1/
+
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.hf_token

@@ -23,7 +23,7 @@ from .render_loss import (
     load_render_camera,
     read_edit_type,
 )
-from .mask_loss_utils import masked_mse_velocity_sparse, should_disable_mask_for_global_style
+from .mask_loss_utils import masked_mse_velocity_sparse, filter_keep_mask
 
 
 class SparseFlowMatchingTrainer(FlowMatchingTrainer):
@@ -295,138 +295,6 @@ class ImageConditionedSparseFlowMatchingCFGTrainer(ImageConditionedMixin, Sparse
     pass
 
 
-class TokenConcatLoRASLatFlowTrainingMixin:
-    """
-    Loads the pretrained SLat Flow trunk, freezes it, and trains only LoRA A/B
-    plus target/source type embeddings for token-concat SLat Flow.
-    """
-
-    def __init__(
-        self,
-        *args,
-        slat_flow_pretrain: Optional[str] = None,
-        token_concat_lora_pretrain: Optional[str] = None,
-        lora: Optional[dict] = None,
-        **kwargs,
-    ):
-        self.slat_flow_pretrain_path = slat_flow_pretrain or token_concat_lora_pretrain
-        self.token_concat_lora_config = lora or {}
-        super().__init__(*args, **kwargs)
-
-    def _pre_init_models(self, **kwargs):
-        super()._pre_init_models(**kwargs)
-        denoiser = self.models.get('denoiser')
-        if denoiser is None:
-            return
-
-        if self.slat_flow_pretrain_path is not None:
-            from safetensors.torch import load_file
-            if self.is_master:
-                print(f'\n[TokenConcatLoRA/SLat] Loading SLat Flow pretrain from: {self.slat_flow_pretrain_path}')
-            pretrain = load_file(self.slat_flow_pretrain_path)
-            incompatible = denoiser.load_state_dict(pretrain, strict=False)
-            if self.is_master:
-                print(
-                    f'  missing_keys: {len(getattr(incompatible, "missing_keys", []))}, '
-                    f'unexpected_keys: {len(getattr(incompatible, "unexpected_keys", []))}'
-                )
-
-        for param in denoiser.parameters():
-            param.requires_grad = False
-
-        cfg = self.token_concat_lora_config
-        enabled = bool(cfg.get('enabled', cfg.get('enable', True)))
-        rank = int(cfg.get('rank', cfg.get('r', 64)))
-        alpha = float(cfg.get('alpha', cfg.get('lora_alpha', 64)))
-        dropout = float(cfg.get('dropout', cfg.get('lora_dropout', 0.05)))
-        target_modules = cfg.get('target_modules', None)
-
-        if enabled:
-            if not hasattr(denoiser, 'apply_lora'):
-                raise TypeError('TokenConcatLoRASLatFlowTrainingMixin requires a denoiser with apply_lora().')
-            replaced = denoiser.apply_lora(
-                rank=rank,
-                alpha=alpha,
-                dropout=dropout,
-                target_modules=target_modules,
-            )
-        else:
-            replaced = []
-
-        train_type_embedding = bool(getattr(denoiser, 'use_type_embedding', True))
-        if train_type_embedding:
-            if hasattr(denoiser, 'type_embedding'):
-                for param in denoiser.type_embedding.parameters():
-                    param.requires_grad = True
-            else:
-                raise TypeError('TokenConcatLoRASLatFlowTrainingMixin requires denoiser.type_embedding.')
-
-        trainable = [(name, param) for name, param in denoiser.named_parameters() if param.requires_grad]
-        invalid_trainable = [
-            name for name, _ in trainable
-            if '.lora_A.' not in name
-            and '.lora_B.' not in name
-            and not (train_type_embedding and name.startswith('type_embedding.'))
-        ]
-        if invalid_trainable:
-            raise RuntimeError(f'Unexpected trainable base parameters: {invalid_trainable[:8]}')
-
-        n_total = sum(param.numel() for param in denoiser.parameters())
-        n_train = sum(param.numel() for _, param in trainable)
-        if self.is_master:
-            print(
-                f'[TokenConcatLoRA/SLat] LoRA enabled={enabled}, rank={rank}, alpha={alpha}, dropout={dropout}, '
-                f'targeted_linear_layers={len(replaced)}'
-            )
-            for name in replaced[:16]:
-                print(f'  lora: {name}')
-            if len(replaced) > 16:
-                print(f'  ... ({len(replaced) - 16} more LoRA layers)')
-            trainable_desc = 'type_embedding + LoRA' if train_type_embedding else 'LoRA only'
-            print(f'  Total params: {n_total:,}, Trainable ({trainable_desc}): {n_train:,}')
-            summary_path = os.path.join(self.output_dir, 'token_concat_lora_slat_trainable_summary.txt')
-            with open(summary_path, 'w') as fp:
-                fp.write(f'total_params: {n_total}\n')
-                fp.write(f'trainable_params: {n_train}\n')
-                fp.write(f'lora_rank: {rank}\n')
-                fp.write(f'lora_layers: {len(replaced)}\n')
-                fp.write(f'train_type_embedding: {train_type_embedding}\n')
-                fp.write('\n'.join(replaced))
-                fp.write('\n\ntrainable_tensors:\n')
-                for name, param in trainable:
-                    fp.write(f'{name}\t{tuple(param.shape)}\t{param.dtype}\n')
-
-    def get_inference_cond(self, cond, ori_slat=None, **kwargs):
-        result = super().get_inference_cond(cond, **kwargs)
-        if ori_slat is not None:
-            result['ori_slat'] = ori_slat
-        return result
-
-    def vis_cond(self, **kwargs):
-        return {}
-
-    def snapshot_dataset(self, *args, **kwargs):
-        pass
-
-    @torch.no_grad()
-    def run_snapshot(self, num_samples, batch_size=4, verbose=False):
-        return {}
-
-
-class EditingTokenConcatLoRAImageSparseFlowMatchingCFGTrainer(
-    TokenConcatLoRASLatFlowTrainingMixin,
-    ImageConditionedMixin,
-    SparseFlowMatchingCFGTrainer,
-):
-    """Image-conditioned SLat Flow trainer for token-concat + LoRA editing."""
-    pass
-
-
-# Backward-compatible trainer name; implementation is token/sequence concat, not feature concat.
-ConcatLoRASLatFlowTrainingMixin = TokenConcatLoRASLatFlowTrainingMixin
-EditingConcatLoRAImageSparseFlowMatchingCFGTrainer = EditingTokenConcatLoRAImageSparseFlowMatchingCFGTrainer
-
-
 class _RenderLossSetupMixin:
     """
     Helper mixin that owns a frozen SLat decoder + GaussianRenderer and the
@@ -481,7 +349,9 @@ class _RenderLossSetupMixin:
                 ckpt_path = os.path.join(slat_dec_path, 'ckpts', f'decoder_{slat_dec_ckpt}.pt')
                 decoder.load_state_dict(torch.load(ckpt_path, map_location='cpu', weights_only=True))
             else:
-                decoder = _models.from_pretrained(pretrained)
+                # FP32 is needed for small weighted pixel gradients; a half
+                # decoder can round the entire render gradient to zero.
+                decoder = _models.from_pretrained(pretrained, use_fp16=False)
             decoder = decoder.to(device).eval()
             for p in decoder.parameters():
                 p.requires_grad = False
@@ -495,7 +365,7 @@ class _RenderLossSetupMixin:
             # by a background mismatch.
             renderer.rendering_options.near = 0.1
             renderer.rendering_options.far = 10.0
-            renderer.rendering_options.bg_color = (1, 1, 1)
+            renderer.rendering_options.bg_color = tuple(self._render_loss_cfg.background)
             renderer.rendering_options.ssaa = 1
             renderer.pipe.kernel_size = 0.1
             renderer.pipe.use_mip_gaussian = True
@@ -561,7 +431,7 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
         render_loss: Optional[Dict] = None,
         render_loss_decoder: Optional[Dict] = None,
         slat_normalization: Optional[Dict] = None,
-        # ---- mask-keep velocity loss (ported from Ori3DEdit_wjw) ----
+        # ---- mask-keep velocity loss ----
         use_mask_loss: bool = False,
         use_slat_mask_loss: bool = True,
         lambda_slat_mask: float = 0.3,
@@ -576,7 +446,15 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
         self.disable_mask_loss_for_global_style = bool(disable_mask_loss_for_global_style)
         self.mask_loss_on_keep_region_only = bool(mask_loss_on_keep_region_only)
         super().__init__(*args, **kwargs)
-        self._init_render_loss(render_loss, render_loss_decoder, slat_normalization)
+        dataset_norm = getattr(self.dataset, 'normalization', None)
+        if dataset_norm is not None and slat_normalization is not None:
+            for key in ('mean', 'std'):
+                if not torch.allclose(torch.as_tensor(dataset_norm[key]), torch.as_tensor(slat_normalization[key])):
+                    raise ValueError('Dataset and render decoder SLAT normalization must match')
+        self._init_render_loss(render_loss, render_loss_decoder, slat_normalization or dataset_norm)
+        self._render_loss_cfg.sigma_min = self.sigma_min
+        if not mask_loss_on_keep_region_only:
+            raise ValueError('Mask loss is defined only on keep regions')
         if self.use_mask_loss and getattr(self, 'is_master', True):
             print(f'[mask_loss] enabled  lambda_slat_mask={self.lambda_slat_mask}  '
                   f'disable_for_global_style={self.disable_mask_loss_for_global_style}')
@@ -595,7 +473,9 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
 
         denoiser.load_state_dict(pretrain, strict=False)
         denoiser.controlnet.load_state_dict(pretrain, strict=False)
-        denoiser.controlnet.initialize_weights()
+        for module in [denoiser.controlnet.before_proj, *denoiser.controlnet.after_proj_list]:
+            for param in module.parameters():
+                torch.nn.init.zeros_(param)
 
         for param in denoiser.parameters():
             param.requires_grad = False
@@ -631,14 +511,14 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
             and ori_slat is not None
             and mask_keep_slat is not None
             and mask_keep_slat.numel() == pred.feats.shape[0]
-            and not should_disable_mask_for_global_style(
-                self.disable_mask_loss_for_global_style, edit_type
-            )
         )
+        if self.use_mask_loss and self.use_slat_mask_loss and not use_keep:
+            raise ValueError('SLAT mask loss enabled but mask_keep_slat / ori_slat missing or misaligned')
         if use_keep:
             v_ori = self.get_v(ori_slat, noise, t)
-            mk = mask_keep_slat.to(device=pred.feats.device, dtype=pred.feats.dtype)
-            terms["loss_mask_keep"] = masked_mse_velocity_sparse(pred.feats, v_ori.feats, mk)
+            mk = filter_keep_mask(mask_keep_slat, edit_type,
+                                  self.disable_mask_loss_for_global_style, pred.feats, x_0.layout)
+            terms["loss_mask_keep"] = masked_mse_velocity_sparse(pred.feats.float(), v_ori.feats.float(), mk)
             terms["mask_keep_ratio"] = mk.mean().detach()
             terms["loss"] = terms["loss"] + self.lambda_slat_mask * terms["loss_mask_keep"]
         elif self.use_mask_loss:
@@ -656,6 +536,8 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
 
         # ---- optional Stage2 single-view target render loss ---------------- #
         rcfg = getattr(self, '_render_loss_cfg', None)
+        terms.update(render_loss=pred.feats.new_zeros((), dtype=torch.float32),
+                     render_loss_weighted=0.0, render_n_used=0, render_lambda=0.0)
         if rcfg is not None and rcfg.enabled:
             # NOTE: self.step += 1 happens AFTER run_step in base.py — i.e. the
             # current call corresponds to the WILL-BE step counter (self.step + 1)
@@ -664,8 +546,9 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
             # render-loss diagnostics are actually visible in stdout when
             # every_n_steps divides i_print.
             step = int(getattr(self, 'step', 0) or 0) + 1
+            lam = schedule_lambda_render(step, int(getattr(self, 'max_steps', 0)), rcfg)
             gate = (step % max(int(rcfg.every_n_steps), 1) == 0)
-            if gate and (t < rcfg.t_max).any().item():
+            if gate and lam > 0 and (t < rcfg.t_max).any().item():
                 if case_dirs is None:
                     raise RuntimeError(
                         '[render_loss] enable_train_render_loss=True but the dataset '
@@ -711,6 +594,14 @@ class SparseControlNetTrainingMixin(_RenderLossSetupMixin):
                 terms['render_n_used'] = int(rd['n_used'])
                 terms['render_elapsed'] = float(rd['elapsed'])
                 terms['render_to_fm_ratio'] = (added / max(fm_val, 1e-12)) if fm_val > 0 else 0.0
+                if getattr(self, 'smoke_verify', False):
+                    for name, value in [('render', lam*rd['loss']), ('keep', terms['loss_mask_keep'])]:
+                        grad = torch.autograd.grad(value, pred.feats, retain_graph=True)[0]
+                        norm = grad.float().norm()
+                        if not torch.isfinite(grad).all() or norm.item() <= 0:
+                            raise RuntimeError(f'SLAT smoke: invalid {name} gradient: norm={norm.item()}, '
+                                               f'finite={torch.isfinite(grad).all().item()}, loss={value.item()}, dtype={grad.dtype}')
+                        terms[f'{name}_velocity_grad_norm'] = norm.detach()
 
         return terms, {}
 

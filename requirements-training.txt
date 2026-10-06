@@ -1,0 +1,5 @@
+-r requirements.txt
+tensorboard
+safetensors
+# Optional SLAT perceptual render term: pip install dreamsim
+-r requirements-data.txt

@@ -13,7 +13,6 @@ __attributes = {
     'FlowMatchingCFGTrainer': 'flow_matching.flow_matching',
     'TextConditionedFlowMatchingCFGTrainer': 'flow_matching.flow_matching',
     'ImageConditionedFlowMatchingCFGTrainer': 'flow_matching.flow_matching',
-    'ImageConditionedFlowMatchingCFGStage1LoRATrainer': 'flow_matching.flow_matching',
     'EditingControlNetTextFlowMatchingCFGTrainer': 'flow_matching.flow_matching',
     'EditingControlNetImageFlowMatchingCFGTrainer': 'flow_matching.flow_matching',
 
@@ -23,8 +22,6 @@ __attributes = {
     'ImageConditionedSparseFlowMatchingCFGTrainer': 'flow_matching.sparse_flow_matching',
     'EditingControlNetTextSparseFlowMatchingCFGTrainer': 'flow_matching.sparse_flow_matching',
     'EditingControlNetImageSparseFlowMatchingCFGTrainer': 'flow_matching.sparse_flow_matching',
-    'EditingConcatLoRAImageSparseFlowMatchingCFGTrainer': 'flow_matching.sparse_flow_matching',
-    'EditingTokenConcatLoRAImageSparseFlowMatchingCFGTrainer': 'flow_matching.sparse_flow_matching',
 }
 
 __submodules = []
@@ -43,35 +40,3 @@ def __getattr__(name):
         else:
             raise AttributeError(f"module {__name__} has no attribute {name}")
     return globals()[name]
-
-
-# For Pylance
-if __name__ == '__main__':
-    from .basic import BasicTrainer
-
-    from .vae.sparse_structure_vae import SparseStructureVaeTrainer
-
-    from .vae.structured_latent_vae_gaussian import SLatVaeGaussianTrainer
-    from .vae.structured_latent_vae_rf_dec import SLatVaeRadianceFieldDecoderTrainer
-    from .vae.structured_latent_vae_mesh_dec import SLatVaeMeshDecoderTrainer
-    
-    from .flow_matching.flow_matching import (
-        FlowMatchingTrainer,
-        FlowMatchingCFGTrainer,
-        TextConditionedFlowMatchingCFGTrainer,
-        ImageConditionedFlowMatchingCFGTrainer,
-        ImageConditionedFlowMatchingCFGStage1LoRATrainer,
-        EditingControlNetTextFlowMatchingCFGTrainer,
-        EditingControlNetImageFlowMatchingCFGTrainer,
-    )
-
-    from .flow_matching.sparse_flow_matching import (
-        SparseFlowMatchingTrainer,
-        SparseFlowMatchingCFGTrainer,
-        TextConditionedSparseFlowMatchingCFGTrainer,
-        ImageConditionedSparseFlowMatchingCFGTrainer,
-        EditingControlNetTextSparseFlowMatchingCFGTrainer,
-        EditingControlNetImageSparseFlowMatchingCFGTrainer,
-        EditingConcatLoRAImageSparseFlowMatchingCFGTrainer,
-        EditingTokenConcatLoRAImageSparseFlowMatchingCFGTrainer,
-    )

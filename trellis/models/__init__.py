@@ -6,7 +6,6 @@ __attributes = {
     
     'SparseStructureFlowModel': 'sparse_structure_flow',
     'ControlledSparseStructureFlowModel': 'controlled_sparse_structure_flow',
-    'InputConcatSparseStructureFlowModel': 'input_concat_flow',
     
     'SLatEncoder': 'structured_latent_vae',
     'SLatGaussianDecoder': 'structured_latent_vae',
@@ -21,9 +20,6 @@ __attributes = {
     'ElasticSLatFlowModel': 'structured_latent_flow',
 
     'ControlledSLatFlowModel': 'controlled_structured_latent_flow',
-    'InputConcatSLatFlowModel': 'input_concat_flow',
-    'ConcatLoRASLatFlowModel': 'concat_lora_slat_flow',
-    'TokenConcatLoRASLatFlowModel': 'concat_lora_slat_flow',
 }
 
 __submodules = []
@@ -71,38 +67,7 @@ def from_pretrained(path: str, **kwargs):
 
     with open(config_file, 'r') as f:
         config = json.load(f)
-    model = __getattr__(config['name'])(**config['args'], **kwargs)
+    model = __getattr__(config['name'])(**{**config['args'], **kwargs})
     model.load_state_dict(load_file(model_file))
 
     return model
-
-
-# For Pylance
-if __name__ == '__main__':
-    from .sparse_structure_vae import (
-        SparseStructureEncoder, 
-        SparseStructureDecoder,
-    )
-    
-    from .sparse_structure_flow import SparseStructureFlowModel
-    from .controlled_sparse_structure_flow import ControlledSparseStructureFlowModel
-    from .input_concat_flow import InputConcatSparseStructureFlowModel
-    
-    from .structured_latent_vae import (
-        SLatEncoder,
-        SLatGaussianDecoder,
-        SLatRadianceFieldDecoder,
-        SLatMeshDecoder,
-        ElasticSLatEncoder,
-        ElasticSLatGaussianDecoder,
-        ElasticSLatRadianceFieldDecoder,
-        ElasticSLatMeshDecoder,
-    )
-    
-    from .structured_latent_flow import (
-        SLatFlowModel,
-        ElasticSLatFlowModel,
-    )
-
-    from .controlled_structured_latent_flow import ControlledSLatFlowModel
-    from .input_concat_flow import InputConcatSLatFlowModel

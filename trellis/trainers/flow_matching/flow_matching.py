@@ -13,6 +13,8 @@ from ...utils.general_utils import dict_reduce
 from .mixins.classifier_free_guidance import ClassifierFreeGuidanceMixin
 from .mixins.text_conditioned import TextConditionedMixin
 from .mixins.image_conditioned import ImageConditionedMixin
+from .mask_loss_utils import masked_mse_velocity, prepare_ss_keep_mask, filter_keep_mask
+from .ss_render_loss import SSRenderLossMixin
 
 
 class FlowMatchingTrainer(BasicTrainer):
@@ -357,160 +359,25 @@ class ImageConditionedFlowMatchingCFGTrainer(ImageConditionedMixin, FlowMatching
 
 
 
-class Stage1SparseStructureLoraFinetuneMixin:
-    """
-    Stage-1 (sparse structure) denoiser: optional TRELLIS pretrain + **standard HuggingFace PEFT LoRA**.
-
-    Uses `LoraConfig` + `get_peft_model` (no MoE). Scope is only `models["denoiser"]` — SLat / stage 2
-    is untouched.
-    """
-
-    def __init__(
-        self,
-        *args,
-        stage1_pretrain: Optional[str] = None,
-        stage1_lora: Optional[dict] = None,
-        **kwargs,
-    ):
-        self.stage1_pretrain_path = stage1_pretrain
-        self.stage1_lora_config = stage1_lora if stage1_lora is not None else {}
-        super().__init__(*args, **kwargs)
-
-    def _pre_init_models(self, **kwargs):
-        super()._pre_init_models(**kwargs)
-
-        cfg = self.stage1_lora_config
-        want_lora = bool(cfg.get("enable", False))
-        if self.stage1_pretrain_path is None and not want_lora:
-            return
-
-        denoiser = self.models.get("denoiser")
-        if denoiser is None:
-            if self.is_master:
-                print('[Stage1Lora] No model key "denoiser" — skipping stage-1 LoRA setup.', flush=True)
-            return
-
-        if self.stage1_pretrain_path:
-            from safetensors.torch import load_file
-
-            if self.is_master:
-                print(f"\n[Stage1Lora] Loading stage-1 pretrain: {self.stage1_pretrain_path}", flush=True)
-            pretrain = load_file(self.stage1_pretrain_path)
-            model_state = denoiser.state_dict()
-            skipped = []
-            filtered_pretrain = {}
-            for key, value in pretrain.items():
-                if key in model_state and value.shape != model_state[key].shape:
-                    skipped.append((key, tuple(value.shape), tuple(model_state[key].shape)))
-                    continue
-                filtered_pretrain[key] = value
-            incompatible = denoiser.load_state_dict(filtered_pretrain, strict=False)
-            if self.is_master:
-                miss = getattr(incompatible, "missing_keys", [])
-                unex = getattr(incompatible, "unexpected_keys", [])
-                print(f"  missing_keys: {len(miss)}, unexpected_keys: {len(unex)}, shape_skipped: {len(skipped)}", flush=True)
-                for key, src_shape, dst_shape in skipped[:8]:
-                    print(f"  shape_skipped: {key}: {src_shape} -> {dst_shape}", flush=True)
-                if len(skipped) > 8:
-                    print(f"  ... ({len(skipped) - 8} more shape-skipped keys)", flush=True)
-
-        if not want_lora:
-            return
-
-        try:
-            from peft import LoraConfig, get_peft_model
-        except ImportError as e:
-            raise ImportError(
-                'Stage-1 LoRA requires the `peft` package. Install e.g. `pip install "peft>=0.7"`.' 
-            ) from e
-
-        r = int(cfg.get("r", 16))
-        lora_alpha = cfg.get("alpha", cfg.get("lora_alpha", r))
-        lora_alpha = float(lora_alpha)
-        lora_dropout = float(cfg.get("lora_dropout", 0.0))
-        use_rslora = bool(cfg.get("use_rslora", True))
-        target_modules = cfg.get(
-            "target_modules",
-            ["to_qkv", "to_q", "to_kv", "to_out"],
-        )
-        modules_to_save = cfg.get("modules_to_save", ["input_layer"])
-        if isinstance(modules_to_save, list) and len(modules_to_save) == 0:
-            modules_to_save = None
-
-        if self.is_master:
-            print(
-                f"\n[Stage1Lora/PEFT] LoraConfig: r={r}, lora_alpha={lora_alpha}, lora_dropout={lora_dropout}, "
-                f"use_rslora={use_rslora}, target_modules={list(target_modules)}, modules_to_save={modules_to_save}"
-            )
-
-        # Crown SFT uses RSLoRA; keep configurable for older `peft` builds.
-        try:
-            lora_config = LoraConfig(
-                r=r,
-                lora_alpha=int(lora_alpha) if lora_alpha == int(lora_alpha) else lora_alpha,
-                lora_dropout=lora_dropout,
-                bias="none",
-                use_rslora=use_rslora,
-                target_modules=list(target_modules),
-                modules_to_save=list(modules_to_save) if modules_to_save else None,
-            )
-        except TypeError:
-            lora_config = LoraConfig(
-                r=r,
-                lora_alpha=int(lora_alpha) if lora_alpha == int(lora_alpha) else lora_alpha,
-                lora_dropout=lora_dropout,
-                bias="none",
-                target_modules=list(target_modules),
-                modules_to_save=list(modules_to_save) if modules_to_save else None,
-            )
-            if self.is_master and use_rslora:
-                print("  [Stage1Lora/PEFT] Note: `use_rslora` not supported by this `peft` version; disabled.")
-
-        denoiser_peft = get_peft_model(denoiser, lora_config)
-        self.models["denoiser"] = denoiser_peft
-        if self.is_master and hasattr(denoiser_peft, "print_trainable_parameters"):
-            denoiser_peft.print_trainable_parameters()
-
-        if self.is_master:
-            trainable = [(name, param) for name, param in denoiser_peft.named_parameters() if param.requires_grad]
-            total_params = sum(param.numel() for param in denoiser_peft.parameters())
-            trainable_params = sum(param.numel() for _, param in trainable)
-            print(
-                f"[Stage1Lora/PEFT] trainable tensors={len(trainable)}, "
-                f"trainable_params={trainable_params:,}, total_params={total_params:,}",
-                flush=True,
-            )
-            summary_path = os.path.join(self.output_dir, "denoiser_lora_trainable_summary.txt")
-            with open(summary_path, "w") as fp:
-                fp.write(f"total_params: {total_params}\n")
-                fp.write(f"trainable_params: {trainable_params}\n")
-                fp.write(f"trainable_tensors: {len(trainable)}\n")
-                fp.write("\n")
-                for name, param in trainable:
-                    fp.write(f"{name}\t{tuple(param.shape)}\t{param.dtype}\n")
-            print(f"[Stage1Lora/PEFT] wrote trainable summary: {summary_path}", flush=True)
-
-
-class ImageConditionedFlowMatchingCFGStage1LoRATrainer(
-    Stage1SparseStructureLoraFinetuneMixin,
-    ImageConditionedFlowMatchingCFGTrainer,
-):
-    """
-    Image-conditioned flow matching with CFG, plus optional **stage-1** pretrain + **HuggingFace PEFT LoRA**
-    on the SS denoiser (no MoE).
-    """
-
-    pass
-
-class ControlNetTrainingMixin:
+class ControlNetTrainingMixin(SSRenderLossMixin):
     """
     Mixin that loads pretrained weights into both main trunk and ControlNet,
     then freezes the main trunk so only ControlNet is trainable.
     Must appear before FlowMatchingTrainer in MRO.
     """
-    def __init__(self, *args, controlnet_pretrain: str = None, **kwargs):
+    def __init__(self, *args, controlnet_pretrain: str = None,
+                 use_mask_loss=False, use_ss_mask_loss=True, lambda_ss_mask=0.3,
+                 disable_mask_loss_for_global_style=True,
+                 mask_loss_on_keep_region_only=True,
+                 render_loss=None, render_loss_decoder=None, **kwargs):
         self.controlnet_pretrain_path = controlnet_pretrain
+        self.use_mask_loss = use_mask_loss and use_ss_mask_loss
+        self.lambda_ss_mask = lambda_ss_mask
+        self.disable_mask_loss_for_global_style = disable_mask_loss_for_global_style
+        if not mask_loss_on_keep_region_only:
+            raise ValueError('Mask loss is defined only on keep regions')
         super().__init__(*args, **kwargs)
+        self._init_ss_render(render_loss, render_loss_decoder)
 
     def _pre_init_models(self, **kwargs):
         """Load pretrained weights and freeze main trunk before optimizer creation."""
@@ -527,7 +394,10 @@ class ControlNetTrainingMixin:
 
         denoiser.load_state_dict(pretrain, strict=False)
         denoiser.controlnet.load_state_dict(pretrain, strict=False)
-        denoiser.controlnet.initialize_weights()
+        # Keep the copied pretrained transformer; reset only new zero gates.
+        for module in [denoiser.controlnet.before_proj, *denoiser.controlnet.after_proj_list]:
+            for param in module.parameters():
+                torch.nn.init.zeros_(param)
 
         for param in denoiser.parameters():
             param.requires_grad = False
@@ -539,8 +409,10 @@ class ControlNetTrainingMixin:
         if self.is_master:
             print(f'  Total params: {n_total:,}, Trainable (ControlNet): {n_train:,}')
 
-    def training_losses(self, x_0, cond=None, ori_voxel=None, **kwargs):
+    def training_losses(self, x_0, cond=None, ori_voxel=None, case_dirs=None, **kwargs):
         """Override to pass ori_voxel to the denoiser."""
+        mask = kwargs.pop('mask_keep_ss', None)
+        edit_type = kwargs.pop('edit_type', None)
         noise = torch.randn_like(x_0)
         t = self.sample_t(x_0.shape[0]).to(x_0.device).float()
         x_t = self.diffuse(x_0, t, noise=noise)
@@ -551,7 +423,27 @@ class ControlNetTrainingMixin:
         target = self.get_v(x_0, noise, t)
         terms = edict()
         terms["mse"] = F.mse_loss(pred, target)
-        terms["loss"] = terms["mse"]
+        terms['loss_fm'] = terms['mse']
+        terms['loss_mask_keep'] = pred.new_zeros((), dtype=torch.float32)
+        terms['mask_keep_ratio'] = pred.new_zeros((), dtype=torch.float32)
+        if self.use_mask_loss:
+            if mask is None or ori_voxel is None:
+                raise ValueError('SS mask loss enabled but mask_keep_ss / ori_voxel missing')
+            m = prepare_ss_keep_mask(mask, pred)
+            m = filter_keep_mask(m, edit_type, self.disable_mask_loss_for_global_style, pred)
+            terms['loss_mask_keep'] = masked_mse_velocity(pred.float(), self.get_v(ori_voxel, noise, t).float(), m)
+            terms['mask_keep_ratio'] = m.mean()
+        terms['loss'] = terms['loss_fm'] + self.lambda_ss_mask * terms['loss_mask_keep']
+        render, render_terms = self._ss_render_loss(x_t, pred, t, x_0, case_dirs, edit_type)
+        terms.update(render_terms)
+        terms['loss'] = terms['loss'] + render
+        if getattr(self, 'smoke_verify', False):
+            for name, value in [('render', render), ('keep', terms['loss_mask_keep'])]:
+                grad = torch.autograd.grad(value, pred, retain_graph=True)[0]
+                norm = grad.float().norm()
+                if not torch.isfinite(grad).all() or norm.item() <= 0:
+                    raise RuntimeError(f'SS smoke: invalid {name} gradient: norm={norm.item()}, finite={torch.isfinite(grad).all().item()}, loss={value.item()}, dtype={grad.dtype}')
+                terms[f'{name}_velocity_grad_norm'] = norm.detach()
 
         mse_per_instance = np.array([
             F.mse_loss(pred[i], target[i]).item()

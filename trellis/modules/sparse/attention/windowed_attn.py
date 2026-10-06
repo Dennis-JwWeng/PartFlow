@@ -94,6 +94,7 @@ def sparse_windowed_scaled_dot_product_self_attention(
     C = qkv.feats.shape[3]
     
     qkv_feats = qkv.feats[fwd_indices]      # [M, 3, H, C]
+    backend = 'sdpa' if ATTN == 'flash_attn' and qkv_feats.dtype == torch.float32 else ATTN
 
     if DEBUG:
         start = 0
@@ -109,12 +110,12 @@ def sparse_windowed_scaled_dot_product_self_attention(
         B = len(seq_lens)
         N = window_size
         qkv_feats = qkv_feats.reshape(B, N, 3, H, C)
-        if ATTN == 'xformers':
+        if backend == 'xformers':
             q, k, v = qkv_feats.unbind(dim=2)                       # [B, N, H, C]
             out = xops.memory_efficient_attention(q, k, v)          # [B, N, H, C]
-        elif ATTN == 'flash_attn':
+        elif backend == 'flash_attn':
             out = flash_attn.flash_attn_qkvpacked_func(qkv_feats)   # [B, N, H, C]
-        elif ATTN == 'sdpa':
+        elif backend == 'sdpa':
             q, k, v = qkv_feats.unbind(dim=2)
             qi = q.transpose(1, 2)
             ki = k.transpose(1, 2)
@@ -124,18 +125,18 @@ def sparse_windowed_scaled_dot_product_self_attention(
             raise ValueError(f"Unknown attention module: {ATTN}")
         out = out.reshape(B * N, H, C)                              # [M, H, C]
     else:
-        if ATTN == 'xformers':
+        if backend == 'xformers':
             q, k, v = qkv_feats.unbind(dim=1)                       # [M, H, C]
             q = q.unsqueeze(0)                                      # [1, M, H, C]
             k = k.unsqueeze(0)                                      # [1, M, H, C]
             v = v.unsqueeze(0)                                      # [1, M, H, C]
             mask = xops.fmha.BlockDiagonalMask.from_seqlens(seq_lens)
             out = xops.memory_efficient_attention(q, k, v, mask)[0] # [M, H, C]
-        elif ATTN == 'flash_attn':
+        elif backend == 'flash_attn':
             cu_seqlens = torch.cat([torch.tensor([0]), torch.cumsum(torch.tensor(seq_lens), dim=0)], dim=0) \
                         .to(qkv.device).int()
             out = flash_attn.flash_attn_varlen_qkvpacked_func(qkv_feats, cu_seqlens, max(seq_lens)) # [M, H, C]
-        elif ATTN == 'sdpa':
+        elif backend == 'sdpa':
             t0 = 0
             outs = []
             for L in seq_lens:

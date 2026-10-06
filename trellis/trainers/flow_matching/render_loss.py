@@ -18,9 +18,8 @@ The decoder/renderer parameters are frozen (requires_grad=False) but executed
 WITHOUT torch.no_grad so gradients flow x0_pred -> v_pred -> denoiser params.
 Target image and camera pose do NOT receive gradients.
 
-Camera-pose loading is intentionally minimal: `load_render_camera` reads from
-`case_meta.json` or an explicit pose file; the precise field names are TODO and
-will be filled in once the user supplies them. Image loading is finalised.
+Camera poses come from Pxform meta.json.camera or view.meta.json (Blender c2w), converted to OpenCV
+w2c with normalized intrinsics. RGB/alpha images retain the full camera frame.
 """
 
 from __future__ import annotations
@@ -57,6 +56,10 @@ class RenderLossConfig:
     pose_key: Optional[str] = None
     resolution: int = 256
     first_only: bool = True   # debug: only compute on batch[0]
+    background: Tuple[float, float, float] = (1.0, 1.0, 1.0)
+    ray_samples: int = 96
+    occupancy_temperature: float = 10.0
+    sigma_min: float = 1e-5
     # Only compute render loss for these edit types. None = all edit types.
     # Default skips addition/deletion because their after.png comes from a
     # Blender re-render pipeline (cross-pipeline domain shift, ~0.03 L1 floor).
@@ -86,7 +89,7 @@ class RenderLossConfig:
         }
         clean = {}
         for k, v in d.items():
-            if v is None:
+            if v is None and alias.get(k, k) != 'allowed_edit_types':
                 continue
             clean[alias.get(k, k)] = v
         return RenderLossConfig(**clean)
@@ -117,13 +120,13 @@ def schedule_lambda_render(step: int, max_steps: int, cfg: RenderLossConfig) -> 
 
 def load_target_image(case_dir: str, cfg: RenderLossConfig, render_resolution: int) -> torch.Tensor:
     """Load `case_dir/<target_image_key>` as float [3,H,W] in [0,1] resized to
-    render_resolution. Strips alpha by pre-multiplying onto a black background
-    (matches the renderer's default bg_color=(0,0,0))."""
+    render_resolution. Composites alpha onto cfg.background, which must match
+    the renderer (white in the Pxform training configs)."""
     from PIL import Image
     p = os.path.join(case_dir, cfg.target_image_key)
     if not os.path.isfile(p):
         # tolerant fallback used elsewhere in the repo
-        from ...datasets.editing_image_latent import _find_image_path
+        from ...utils.editing_utils import _find_image_path
         alt = _find_image_path(case_dir, 'edit')
         if alt is None:
             raise FileNotFoundError(
@@ -133,7 +136,7 @@ def load_target_image(case_dir: str, cfg: RenderLossConfig, render_resolution: i
     img = Image.open(p)
     if img.mode == 'RGBA':
         rgba = np.array(img).astype(np.float32) / 255.0
-        rgb = rgba[..., :3] * rgba[..., 3:4]   # premultiply onto black bg
+        rgb = rgba[..., :3] * rgba[..., 3:4] + np.asarray(cfg.background, dtype=np.float32) * (1-rgba[..., 3:4])
     else:
         rgb = np.array(img.convert('RGB')).astype(np.float32) / 255.0
     t = torch.from_numpy(rgb).permute(2, 0, 1).contiguous()
@@ -172,6 +175,8 @@ def load_render_camera(case_dir: str, cfg: RenderLossConfig) -> Tuple[torch.Tens
         path = cfg.pose_path if os.path.isabs(cfg.pose_path) else os.path.join(case_dir, cfg.pose_path)
     else:
         path = os.path.join(case_dir, 'view.meta.json')
+        if not os.path.isfile(path):
+            path = os.path.join(case_dir, 'meta.json')
     if not os.path.isfile(path):
         raise FileNotFoundError(f'[render_loss] pose file not found: {path}')
 
@@ -182,7 +187,7 @@ def load_render_camera(case_dir: str, cfg: RenderLossConfig) -> Tuple[torch.Tens
     if cfg.pose_key:
         obj = meta.get(cfg.pose_key, meta)
 
-    frame = obj.get('frame', obj)
+    frame = obj.get('frame', obj.get('camera', obj))
     if 'transform_matrix' not in frame or 'camera_angle_x' not in frame:
         raise ValueError(
             f'[render_loss] {path}: expected frame.transform_matrix and '
@@ -212,7 +217,7 @@ def read_edit_type(case_dir: str) -> Optional[str]:
     """Best-effort lookup of the case's edit_type:
         1. <case>/view.meta.json  (key 'edit_type')
         2. <case>/meta.json       (key 'edit_type')
-        3. infer from path: .../H3D_v1/<edit_type>/<shard>/<obj_id>/<edit_id>
+        3. infer from path: .../<edit_type>/<shard>/<obj_id>/<edit_id>
     Returns None if unknown."""
     for fn in ('view.meta.json', 'meta.json'):
         p = os.path.join(case_dir, fn)
@@ -282,6 +287,10 @@ def _get_dreamsim(device) -> nn.Module:
 # Core entry point                                                            #
 # --------------------------------------------------------------------------- #
 
+def predict_clean_features(noisy, velocity, t, sigma_min=1e-5):
+    """Exact clean endpoint for x_t=(1-t)x0+[sigma+(1-sigma)t]*noise."""
+    return (1-sigma_min)*noisy - (sigma_min+(1-sigma_min)*t)*velocity
+
 def compute_single_view_train_render_loss(
     *,
     x_t,                         # SparseTensor
@@ -304,7 +313,8 @@ def compute_single_view_train_render_loss(
     -----
     - Skips items with t_i >= cfg.t_max.
     - If cfg.first_only, only the first eligible sample in the batch is used.
-    - All decode/render compute is performed in fp32 with autocast disabled.
+    - Autocast is disabled; decoder blocks retain their pretrained precision,
+      while render inputs and image-space losses use fp32.
     """
     start = time.time()
     device = target_images.device
@@ -313,10 +323,10 @@ def compute_single_view_train_render_loss(
     if hasattr(x_t, 'layout') and x_t.layout is not None:
         idx_per_token = _layout_index_per_token(x_t)             # [N_total]
         t_per_token = t.view(-1)[idx_per_token].unsqueeze(-1)    # [N_total,1]
-        x0_feats = x_t.feats - t_per_token * v_pred.feats
+        x0_feats = predict_clean_features(x_t.feats, v_pred.feats, t_per_token, cfg.sigma_min)
     else:
         t_b = t.view(-1, *([1] * (x_t.feats.dim() - 1)))
-        x0_feats = x_t.feats - t_b * v_pred.feats
+        x0_feats = predict_clean_features(x_t.feats, v_pred.feats, t_b, cfg.sigma_min)
     x0_pred = x_t.replace(x0_feats)
 
     # 2) Pick eligible items in the batch (t < t_max && per-sample mask).
@@ -344,7 +354,8 @@ def compute_single_view_train_render_loss(
             )
         else:
             x0_for_dec = x0_pred.replace(x0_pred.feats.float())
-        reps = decoder(x0_for_dec)   # List[Gaussian], batch-aligned
+        # Decode only eligible cases, rather than the entire batch.
+        reps = {i: decoder(x0_for_dec[i])[0] for i in eligible}
 
     # 4) Render eligible reps and accumulate per-image losses (MSE + DreamSim).
     parts_mse, parts_ds = [], []

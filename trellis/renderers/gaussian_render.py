@@ -6,7 +6,6 @@
 # This software is free for non-commercial, research and evaluation use 
 # under the terms of the LICENSE.md file.
 #
-# For inquiries contact  george.drettakis@inria.fr
 #
 
 import torch
@@ -16,7 +15,6 @@ import numpy as np
 from ..representations.gaussian import Gaussian
 from .sh_utils import eval_sh
 import torch.nn.functional as F
-from easydict import EasyDict as edict
 
 
 def intrinsics_to_projection(

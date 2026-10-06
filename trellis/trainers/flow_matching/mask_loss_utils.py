@@ -26,7 +26,8 @@ def masked_mse_velocity(
     else:
         mask = mask.to(dtype=pred.dtype, device=pred.device)
     diff = (pred - target) ** 2 * mask
-    denom = mask.sum() * pred.shape[1] + eps
+    # mask already includes the channel dimension after expand_as.
+    denom = mask.sum() + eps
     return diff.sum() / denom
 
 
@@ -78,3 +79,17 @@ def should_disable_mask_for_global_style(disable: bool, edit_type) -> bool:
     if isinstance(edit_type, (list, tuple)):
         return any(x == "global" for x in edit_type)
     return False
+
+
+def filter_keep_mask(mask, edit_type, disable, ref, layout=None):
+    """Exclude global edits per sample, without dropping the rest of a batch."""
+    m = mask.to(device=ref.device, dtype=torch.float32).clone()
+    types = [edit_type] if isinstance(edit_type, str) else edit_type
+    if disable and types is not None:
+        for i, kind in enumerate(types):
+            if kind == 'global':
+                if layout is None:
+                    m[i] = 0
+                else:
+                    m[layout[i]] = 0
+    return m

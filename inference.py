@@ -49,8 +49,7 @@ from torch.utils.data import DataLoader
 from dataset import PxformDataset, collate_identity
 
 from trellis import models
-from trellis.datasets.editing_image_latent import _load_image_as_tensor
-from trellis.datasets.editing_slat_text import map_ori_to_edit_coords
+from trellis.utils.editing_utils import _load_image_as_tensor, map_ori_to_edit_coords
 from trellis.models import from_pretrained
 from trellis.modules import sparse as sp
 from trellis.pipelines import TrellisImageTo3DPipeline

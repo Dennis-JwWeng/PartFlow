@@ -1,9 +1,11 @@
 from . import samplers
-from .trellis_image_to_3d import TrellisImageTo3DPipeline
 
 
 def __getattr__(name: str):
     """Lazy-import text pipeline so SS-only code paths do not require open3d."""
+    if name == "TrellisImageTo3DPipeline":
+        from .trellis_image_to_3d import TrellisImageTo3DPipeline
+        return TrellisImageTo3DPipeline
     if name == "TrellisTextTo3DPipeline":
         from .trellis_text_to_3d import TrellisTextTo3DPipeline as _TrellisTextTo3DPipeline
 
@@ -12,6 +14,8 @@ def __getattr__(name: str):
 
 
 def _pipeline_cls(name: str):
+    if name == 'TrellisImageTo3DPipeline':
+        return __getattr__(name)
     if name == "TrellisTextTo3DPipeline":
         from .trellis_text_to_3d import TrellisTextTo3DPipeline
 
