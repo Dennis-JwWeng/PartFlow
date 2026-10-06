@@ -1,189 +1,132 @@
 <div align="center">
 
-# [SIGGRAPH ASIA 2026] Feedforward 3D Editing Learns from Semantic-Part Transformation
+# 🧩 PartFlow
 
-Jiawei Weng<sup>1,&ast;</sup>,
-Saining Zhang<sup>1,&ast;,†</sup>,
-Zhenxin Diao<sup>2,&ast;</sup>,
-Peishuo Li<sup>1</sup>,
-Henghaofan Zhang<sup>2</sup>,
-Junhao Chen<sup>2</sup>,
-Hao Zhao<sup>2,†</sup>
+**Feedforward 3D Editing Learns from Semantic-Part Transformation**
+
+[Jiawei Weng](mailto:jweng007@e.ntu.edu.sg)<sup>1,&ast;</sup>,
+[Saining Zhang](https://sainingzhang.github.io/)<sup>1,&ast;,†</sup>,
+[Zhenxin Diao](mailto:diaozhenxin2005@outlook.com)<sup>2,&ast;</sup>,
+[Peishuo Li](mailto:peishuo001@e.ntu.edu.sg)<sup>1</sup>,
+[Henghaofan Zhang](mailto:hhfzhang@outlook.com)<sup>2</sup>,
+[Junhao Chen](https://yisuanwang.github.io/)<sup>2</sup>,
+[Hao Zhao](https://sites.google.com/view/fromandto)<sup>2,†</sup>
 
 <sup>1</sup>Nanyang Technological University, Singapore &nbsp;&nbsp;
 <sup>2</sup>Tsinghua University, China
 
 <sub>&ast;Equal contribution. †Corresponding author.</sub>
 
+<a href="https://dennis-jwweng.github.io/pxform/"><img src="https://img.shields.io/badge/Project%20Page-333399.svg?logo=googlehome" height="22" alt="Project page"></a>
+<a href="https://arxiv.org/abs/2605.27351"><img src="https://img.shields.io/badge/arXiv-2605.27351-b5212f.svg?logo=arxiv" height="22" alt="Paper"></a>
+<a href="https://huggingface.co/datasets/ART-3D/Pxform_v1"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Dataset-Pxform__v1-d96902.svg" height="22" alt="Dataset"></a>
+<a href="https://huggingface.co/ART-3D/PartFlow_models"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Weights-PartFlow__models-276cb4.svg" height="22" alt="Pretrained weights"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" height="22" alt="License"></a>
+
 </div>
 
-<div align="center">
-  <a href="https://dennis-jwweng.github.io/pxform/"><img src=https://img.shields.io/badge/Project%20Page-333399.svg?logo=googlehome height=22px></a>
-  <a href="https://arxiv.org/abs/2605.27351"><img src=https://img.shields.io/badge/Arxiv-2605.27351-b5212f.svg?logo=arxiv height=22px></a>
-  <a href="https://huggingface.co/datasets/ART-3D/Pxform_v1"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Dataset-Pxform__v1-d96902.svg height=22px></a>
-  <a href="https://huggingface.co/ART-3D/PartFlow_models"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Weights-PartFlow__models-276cb4.svg height=22px></a>
-  <a href="LICENSE"><img src=https://img.shields.io/badge/License-MIT-yellow.svg height=22px></a>
-</div>
+<p align="center">
+  <img src="assets/gallery.png" alt="PartFlow edited asset gallery" width="95%">
+</p>
 
-<div align="center">
-  <img src="assets/gallery.png" alt="PartFlow — edited asset gallery" width="95%">
-</div>
+**Edit a 3D asset with a target image.** PartFlow uses two stages of flow matching,
+with no per-asset optimization or 3D mask at inference. It learns from **Pxform**:
+100K+ paired edits across seven edit types, grounded in semantic parts.
 
-> **PartFlow** is a feedforward 3D editing network that edits an existing 3D
-> asset to match a target edit image — no per-asset optimisation, no 3D mask
-> at inference. We train it on **Pxform**, a high-quality 3D editing dataset
-> with 100K+ consistent before/after pairs across seven edit types, grounding
-> edits in semantic 3D parts.
+## 📰 News
 
-## News
-
-- **October 2026:** Training code released for both SS and SLAT stages, including data preparation, part-mask losses, and render losses.
-- **August 2026:** PartFlow accepted to **SIGGRAPH Asia 2026**.
+- **October 2026:** Training code released, including data preparation, mask losses, and render losses.
+- **August 2026:** Paper accepted to **SIGGRAPH Asia 2026**.
 - **May 2026:** Inference code and pretrained weights released.
 
-## Highlights
+## 🔬 Method
 
-- **Feedforward** — one forward pass per edit
-- **Semantic-part grounded** — trained on Pxform's part-level pairs
-- **Mask-free at inference** — only needs the source asset + a target image
-- **Two-stage flow** — sparse-structure edit ➜ structured-latent edit
+<p align="center">
+  <img src="assets/method.png" alt="PartFlow two-stage architecture" width="95%">
+</p>
 
+Both stages condition a pretrained [TRELLIS](https://github.com/microsoft/TRELLIS)
+backbone on source latents and a target edit image.
 
-## Method
+| Stage | Prediction |
+|---|---|
+| **SS flow** | Edited sparse structure |
+| **SLAT flow** | Edited structured latent, decoded into a textured 3D asset |
 
-<div align="center">
-  <img src="assets/method.png" alt="PartFlow architecture — two-stage controlled flow" width="95%">
-</div>
+## 🛠️ Installation
 
-PartFlow edits in two stages, conditioning a pretrained 3D generative prior
-([TRELLIS](https://github.com/microsoft/TRELLIS)) on the **source asset's
-latent** and a **target edit image**. Each stage is a controlled flow model
-with a zero-linear gated reference branch and a mask-aware training loss:
-
-- **Stage 1 — Sparse-structure flow.** Inputs the source SS latent + edit
-  condition, predicts the edited 16³ voxel structure.
-- **Stage 2 — Structured-latent (SLAT) flow.** Inputs the source SLAT mapped
-  to the edited coords + edit condition, predicts the edited SLAT, which the
-  TRELLIS decoders turn into a textured `edit.glb`.
-
-## Installation
-
-PartFlow reuses the TRELLIS runtime (same CUDA extensions, same frozen
-DINOv2 / SS / SLAT decoders). Set up TRELLIS first, then add PartFlow on top.
-Tested with **Python 3.10**, **PyTorch 2.5.0**, **CUDA 12.4**.
-
-**1. Set up the TRELLIS environment.** Follow the official
-[TRELLIS installation guide](https://github.com/microsoft/TRELLIS#-installation)
-to create the conda env and build the CUDA extensions (`spconv`,
-`flash-attn`, `kaolin`, `diff_gaussian_rasterization`, `nvdiffrast`,
-`diffoctreerast`). For convenience, an equivalent one-liner is bundled here:
+Set up the [TRELLIS environment](https://github.com/microsoft/TRELLIS#-installation),
+or use the bundled installer, then install PartFlow dependencies:
 
 ```bash
 . ./setup.sh --new-env --basic --flash-attn --diffoctreerast --spconv \
              --mipgaussian --kaolin --nvdiffrast
-```
-
-**2. Install PartFlow's extra Python dependencies** into the same env:
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Weights
+Inference environment: **Python 3.10 · PyTorch 2.5.0 · CUDA 12.4**.
+
+## 🚀 Inference
+
+Download the stage weights and run the included example:
 
 ```bash
-python download_weights.py          # -> ./weights/{stage1_ss,stage2_slat}/
+python download_weights.py
+python inference.py --input examples/mod_glass_disc_table --output_dir outputs
 ```
 
-Pulls the two trained stage models from
-[`ART-3D/PartFlow_models`](https://huggingface.co/ART-3D/PartFlow_models).
+Each case produces `outputs/<edit_id>/edit.glb` and `pred_slat.npz`.
+Pass a parent directory to process multiple cases; use `--skip_existing` to resume.
 
-## Data layout
+<details>
+<summary><b>📁 Prepare your own inputs</b></summary>
 
-Inference reads pre-encoded inputs. Each *case* is a directory:
+Each case contains source TRELLIS latents and a target image:
 
 ```text
 <case_dir>/
-    ori_ss_latents.npz   # key `mean`: float32 [8, 16, 16, 16]   — source sparse-structure latent
-    ori_latents.npz      # `coords` [N,3] int, `feats` [N,8] f32 — source structured latent (SLAT)
-    edit_img.png         # the target edit image (RGB or RGBA)
-    case_meta.json       # optional metadata (prompt, edit type, ...)
+├── ori_ss_latents.npz   # mean: float32 [8,16,16,16]
+├── ori_latents.npz      # coords: int [N,3]; feats: float32 [N,8]
+├── edit_img.png         # target image, RGB or RGBA
+└── case_meta.json       # optional metadata
 ```
 
-`ori_ss_latents.npz` / `ori_latents.npz` are the TRELLIS latents of the
-**source** asset; produce them with the standard TRELLIS image-to-3D encoder.
-Provide the SLAT `feats` as **raw** encoder output — inference normalizes them
-with the TRELLIS latent statistics internally (the stage models operate in
-normalized SLat space) and denormalizes the prediction before decoding.
-Ground-truth `edit_*` files, if present, are ignored by inference.
+Provide SLAT features as **raw encoder outputs**; normalization and decoder
+denormalization are handled internally. Ground-truth edited latents are optional
+and ignored by inference. Sampling options: `--steps`, `--cfg_strength`, and
+`--manifest`; see `python inference.py --help`.
 
-## Run inference
+</details>
 
-```bash
-# single case
-python inference.py --input examples/mod_glass_disc_table --output_dir outputs
+## 🏋️ Training
 
-# a whole directory of cases
-python inference.py --input /path/to/pxform/cases --output_dir outputs
-
-# useful flags
-#   --steps 50           flow-sampling steps
-#   --cfg_strength 0.0   classifier-free guidance (0 = condition only)
-#   --manifest ids.json  restrict to a list of case ids
-#   --skip_existing      resume a partial run
-```
-
-Each case writes `outputs/<edit_id>/edit.glb` and `pred_slat.npz`.
-
-## Training
-
-Two-stage training includes real part-mask loss, SS silhouette render loss and
-SLAT RGB render loss.
-
-The published [Pxform_v1 training data and masks](https://huggingface.co/datasets/ART-3D/Pxform_v1/tree/main/data)
-are prepared together under `data/Pxform_v1/`:
+Both stages support real part-mask losses, with **SS silhouette** and **SLAT RGB**
+render supervision. Download the paired training data and matching masks together:
 
 ```bash
 pip install -r requirements-training.txt
-python download_data.py --shards 00    # one shard to get started; use all for full data
+python download_data.py --shards 00  # start with one shard; use all for full data
 GPU_ID=0 bash scripts/run_training_smoke.sh
-python train.py --config configs/train_stage1_ss.json --output_dir outputs/train_ss --num_gpus 1
-python train.py --config configs/train_stage2_slat.json --output_dir outputs/train_slat --num_gpus 1
+
+python train.py --config configs/train_stage1_ss.json \
+  --output_dir outputs/train_ss --num_gpus 1
+python train.py --config configs/train_stage2_slat.json \
+  --output_dir outputs/train_slat --num_gpus 1
 ```
 
-The default configs discover the local data and real masks automatically.
-See [training instructions](docs/training.md) for the release layout, offline
-weights, normalization, losses and multi-GPU/resume options.
+Data and masks are discovered automatically under `data/Pxform_v1/`.
+See the **[training guide](docs/training.md)** for normalization, losses,
+offline weights, multi-GPU training, and checkpoint resume.
 
-## Repository layout
+## 🎨 Results
 
-```text
-PartFlow/
-├── train.py            SS and SLAT training CLI
-├── download_data.py    download, extract and verify Pxform pairs + masks
-├── data/               repository-local dataset location (large files ignored)
-├── docs/training.md    training and data instructions
-├── scripts/            training smoke entry
-├── inference.py        two-stage inference pipeline + CLI
-├── dataset.py          PxformDataset (per-case loader)
-├── download_weights.py fetch weights from Hugging Face
-├── configs/            Stage 1 / Stage 2 model configs
-├── examples/           one ready-to-run example case
-├── trellis/            TRELLIS backbone + PartFlow stage models
-├── assets/             README figures
-├── setup.sh            CUDA-extension installer
-└── requirements.txt    pure-pip dependencies
-```
+<p align="center">
+  <img src="assets/teaser_geometry.jpg" alt="Geometry editing comparisons" width="95%">
+  <br><br>
+  <img src="assets/teaser_colormat.jpg" alt="Appearance editing comparisons" width="95%">
+</p>
 
-## Results Comparison
-
-<div align="center">
-  <img src="assets/teaser_geometry.jpg" alt="PartFlow vs. baselines — geometry edits" width="95%">
-  <br/><br/>
-  <img src="assets/teaser_colormat.jpg" alt="PartFlow vs. baselines — appearance edits" width="95%">
-</div>
-
-## Citation
+## 📖 Citation
 
 ```bibtex
 @article{weng2026partflow,
@@ -194,6 +137,6 @@ PartFlow/
 }
 ```
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 Built on [TRELLIS](https://github.com/microsoft/TRELLIS).
